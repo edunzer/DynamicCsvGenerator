@@ -27,8 +27,12 @@ public with sharing class DynamicCsvGenerator {
         List<CsvResponse> responses = new List<CsvResponse>();
 
         for (CsvRequest request : requests) {
-            if (request.records.isEmpty() || request.fieldNames.isEmpty()) {
-                throw new FlowException('No records or fields provided for CSV generation.');
+            // 🚨 Check if the request is valid
+            if (request == null || request.records == null || request.records.isEmpty()) {
+                throw new FlowException('Error: No records provided for CSV generation.');
+            }
+            if (request.fieldNames == null || request.fieldNames.isEmpty()) {
+                throw new FlowException('Error: No field names provided.');
             }
 
             // Step 1: Create CSV Header
@@ -37,15 +41,17 @@ public with sharing class DynamicCsvGenerator {
             // Step 2: Populate CSV Rows
             for (SObject record : request.records) {
                 List<String> rowValues = new List<String>();
+
                 for (String fieldName : request.fieldNames) {
                     String fieldValue = '';
                     try {
-                        fieldValue = String.valueOf(record.get(fieldName)); // Get field value
+                        fieldValue = String.valueOf(record.get(fieldName) != null ? record.get(fieldName) : '');
                     } catch (Exception e) {
                         fieldValue = 'ERROR'; // Handle missing fields
                     }
                     rowValues.add('"' + fieldValue.replace('"', '""') + '"'); // Escape quotes
                 }
+
                 csvContent += String.join(rowValues, ',') + '\n';
             }
 
@@ -58,7 +64,9 @@ public with sharing class DynamicCsvGenerator {
             insert contentVersion;
 
             // Step 4: Retrieve ContentDocument ID
-            ContentDocument contentDoc = [SELECT Id FROM ContentDocument WHERE Id IN (SELECT ContentDocumentId FROM ContentVersion WHERE Id = :contentVersion.Id) LIMIT 1];
+            ContentDocument contentDoc = [SELECT Id FROM ContentDocument WHERE Id IN 
+                                          (SELECT ContentDocumentId FROM ContentVersion WHERE Id = :contentVersion.Id) 
+                                          LIMIT 1];
 
             // Step 5: Optionally Relate ContentDocument to a Record
             if (String.isNotBlank(request.recordId)) {
