@@ -27,13 +27,19 @@ public with sharing class DynamicCsvGenerator {
         List<CsvResponse> responses = new List<CsvResponse>();
 
         for (CsvRequest request : requests) {
-            // 🚨 Check if the request is valid
+            // 🚨 Validate Inputs
             if (request == null || request.records == null || request.records.isEmpty()) {
                 throw new FlowException('Error: No records provided for CSV generation.');
             }
             if (request.fieldNames == null || request.fieldNames.isEmpty()) {
                 throw new FlowException('Error: No field names provided.');
             }
+            if (String.isBlank(request.fileName)) {
+                throw new FlowException('Error: File name cannot be blank.');
+            }
+
+            // Ensure file has .csv extension
+            String fileName = request.fileName.endsWith('.csv') ? request.fileName : request.fileName + '.csv';
 
             // Step 1: Create CSV Header
             String csvContent = String.join(request.fieldNames, ',') + '\n';
@@ -49,7 +55,9 @@ public with sharing class DynamicCsvGenerator {
                     } catch (Exception e) {
                         fieldValue = 'ERROR'; // Handle missing fields
                     }
-                    rowValues.add('"' + fieldValue.replace('"', '""') + '"'); // Escape quotes
+
+                    // Escape CSV special characters
+                    rowValues.add(fieldValue.escapeCsv());
                 }
 
                 csvContent += String.join(rowValues, ',') + '\n';
@@ -57,8 +65,8 @@ public with sharing class DynamicCsvGenerator {
 
             // Step 3: Create and Save as ContentVersion
             ContentVersion contentVersion = new ContentVersion();
-            contentVersion.Title = request.fileName;
-            contentVersion.PathOnClient = request.fileName;
+            contentVersion.Title = fileName;
+            contentVersion.PathOnClient = fileName;
             contentVersion.VersionData = Blob.valueOf(csvContent);
             contentVersion.IsMajorVersion = true;
             insert contentVersion;
